@@ -9,6 +9,7 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 
+# Patter Singleton
 # Dependency
 def get_db():
     db = SessionLocal()
