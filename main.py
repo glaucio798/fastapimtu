@@ -1,12 +1,31 @@
 from automata.tm.dtm import DTM
 from fastapi import FastAPI, Request, Depends
+from fastapi_mail import ConnectionConfig, MessageSchema, MessageType, FastMail
 from sqlalchemy.orm import Session
 
-from sql_app.database import engine, SessionLocal
 from sql_app import crud, models, schemas
+from sql_app.database import engine, SessionLocal
+from util.email_body import EmailSchema
+
+from prometheus_fastapi_instrumentator import Instrumentator
 
 models.Base.metadata.create_all(bind=engine)
+
+conf = ConnectionConfig(
+    MAIL_USERNAME="1cada09aba3b38",
+    MAIL_PASSWORD="839678f967766f",
+    MAIL_FROM="from@example.com",
+    MAIL_PORT=587,
+    MAIL_SERVER="sandbox.smtp.mailtrap.io",
+    MAIL_STARTTLS=False,
+    MAIL_SSL_TLS=False,
+    USE_CREDENTIALS=True,
+    VALIDATE_CERTS=True
+)
+
 app = FastAPI()
+
+Instrumentator().instrument(app).expose(app)
 
 
 # Patter Singleton
@@ -110,7 +129,28 @@ async def dtm(info: Request, db: Session = Depends(get_db)):
     history = schemas.History(query=str(info), result=result)
     crud.create_history(db=db, history=history)
 
+    email_shema = EmailSchema(email=["to@example.com"])
+
+    await simple_send(email_shema, result=result, configuration=str(info))
+
     return {
         "code": result == "accepted" and "200" or "400",
         "msg": result
     }
+
+
+async def simple_send(email: EmailSchema, result: str, configuration: str):
+    html = """
+    <p>Thanks for using Fastapi-mail</p>
+    <p> The result is: """ + result + """</p>
+    <p> We have used this configuration: """ + configuration + """</p>
+    """
+    message = MessageSchema(
+        subject="Fastapi-Mail module",
+        recipients=email.dict().get("email"),
+        body=html,
+        subtype=MessageType.html)
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
+    return "OK"
